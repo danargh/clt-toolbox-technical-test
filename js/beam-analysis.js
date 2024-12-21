@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /** ============================ Beam Analysis Data Type ============================ */
 
@@ -34,12 +34,12 @@ class Beam {
 class BeamAnalysis {
     constructor() {
         this.options = {
-            condition: 'simply-supported'
+            condition: "simply-supported",
         };
 
         this.analyzer = {
-            'simply-supported': new BeamAnalysis.analyzer.simplySupported(),
-            'two-span-unequal': new BeamAnalysis.analyzer.twoSpanUnequal()
+            "simply-supported": new BeamAnalysis.analyzer.simplySupported(),
+            "two-span-unequal": new BeamAnalysis.analyzer.twoSpanUnequal(),
         };
     }
     /**
@@ -54,10 +54,10 @@ class BeamAnalysis {
             return {
                 beam: beam,
                 load: load,
-                equation: analyzer.getDeflectionEquation(beam, load)
+                equation: analyzer.getDeflectionEquation(beam, load),
             };
         } else {
-            throw new Error('Invalid condition');
+            throw new Error("Invalid condition");
         }
     }
     getBendingMoment(beam, load, condition) {
@@ -67,10 +67,10 @@ class BeamAnalysis {
             return {
                 beam: beam,
                 load: load,
-                equation: analyzer.getBendingMomentEquation(beam, load)
+                equation: analyzer.getBendingMomentEquation(beam, load),
             };
         } else {
-            throw new Error('Invalid condition');
+            throw new Error("Invalid condition");
         }
     }
     getShearForce(beam, load, condition) {
@@ -80,16 +80,13 @@ class BeamAnalysis {
             return {
                 beam: beam,
                 load: load,
-                equation: analyzer.getShearForceEquation(beam, load)
+                equation: analyzer.getShearForceEquation(beam, load),
             };
         } else {
-            throw new Error('Invalid condition');
+            throw new Error("Invalid condition");
         }
     }
 }
-
-
-
 
 /** ============================ Beam Analysis Analyzer ============================ */
 
@@ -110,31 +107,58 @@ BeamAnalysis.analyzer.simplySupported = class {
         this.load = load;
     }
     getDeflectionEquation(beam, load) {
+        const { primarySpan, material } = beam;
+        const { EI } = material.properties;
+
         return function (x) {
-            return {
-                x: x,
-                y: null
-            };
+            const L = primarySpan;
+            const w = load;
+            if (x >= 0 && x <= L) {
+                return {
+                    x: x,
+                    y: (w * x * (L ** 3 - 2 * L * x ** 2 + x ** 3)) / (24 * EI),
+                };
+            } else {
+                return {
+                    x: x,
+                    y: null,
+                };
+            }
         };
     }
     getBendingMomentEquation(beam, load) {
+        const { primarySpan } = beam;
+
         return function (x) {
-            return {
-                x: x,
-                y: null
-            };
+            const L = primarySpan;
+            const w = load;
+            if (x >= 0 && x <= L) {
+                return {
+                    x: x,
+                    y: (w * x * (L - x)) / 2,
+                };
+            } else {
+                return { x: x, y: null };
+            }
         };
     }
     getShearForceEquation(beam, load) {
+        const { primarySpan } = beam;
+
         return function (x) {
-            return {
-                x: x,
-                y: null
-            };
+            const L = primarySpan;
+            const w = load;
+            if (x >= 0 && x <= L) {
+                return {
+                    x: x,
+                    y: w * (L / 2 - x),
+                };
+            } else {
+                return { x: x, y: null };
+            }
         };
     }
 };
-
 
 /**
  * Calculate deflection, bending stress and shear stress for a beam with two spans of equal condition
@@ -147,28 +171,90 @@ BeamAnalysis.analyzer.twoSpanUnequal = class {
         this.beam = beam;
         this.load = load;
     }
+
     getDeflectionEquation(beam, load) {
+        const { primarySpan, secondarySpan, material } = beam;
+        const { EI } = material.properties;
+
         return function (x) {
-            return {
-                x: x,
-                y: null
-            };
+            const L1 = primarySpan;
+            const L2 = secondarySpan;
+            const w = load;
+
+            if (x >= 0 && x <= L1) {
+                // Rentang pertama
+                return {
+                    x: x,
+                    y:
+                        (w * x * (L1 ** 3 - 2 * L1 * x ** 2 + x ** 3)) /
+                        (24 * EI),
+                };
+            } else if (x > L1 && x <= L1 + L2) {
+                // Rentang kedua
+                const x2 = x - L1;
+                return {
+                    x: x,
+                    y:
+                        (w * x2 * (L2 ** 3 - 2 * L2 * x2 ** 2 + x2 ** 3)) /
+                        (24 * EI),
+                };
+            } else {
+                return { x: x, y: null };
+            }
         };
     }
+
     getBendingMomentEquation(beam, load) {
+        const { primarySpan, secondarySpan } = beam;
+
         return function (x) {
-            return {
-                x: x,
-                y: null
-            };
+            const L1 = primarySpan;
+            const L2 = secondarySpan;
+            const w = load;
+
+            if (x >= 0 && x <= L1) {
+                // Rentang pertama (First span)
+                return {
+                    x: x,
+                    y: (w * x * (L1 - x)) / 2, // Positive bending moment
+                };
+            } else if (x > L1 && x <= L1 + L2) {
+                // Rentang kedua (Second span)
+                const x2 = x - L1;
+                return {
+                    x: x,
+                    y: -(w * x2 * (L2 - x2)) / 2, // Negative bending moment
+                };
+            } else {
+                return { x: x, y: null }; // Out of bounds, no bending moment
+            }
         };
     }
+
     getShearForceEquation(beam, load) {
+        const { primarySpan, secondarySpan } = beam;
+
         return function (x) {
-            return {
-                x: x,
-                y: null
-            };
+            const L1 = primarySpan;
+            const L2 = secondarySpan;
+            const w = load;
+
+            if (x >= 0 && x <= L1) {
+                // Rentang pertama
+                return {
+                    x: x,
+                    y: w * (L1 / 2 - x),
+                };
+            } else if (x > L1 && x <= L1 + L2) {
+                // Rentang kedua
+                const x2 = x - L1;
+                return {
+                    x: x,
+                    y: w * (L2 / 2 - x2),
+                };
+            } else {
+                return { x: x, y: null };
+            }
         };
     }
 };
