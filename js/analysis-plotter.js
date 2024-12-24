@@ -1,8 +1,5 @@
 "use strict";
 
-/**
- * Plot result from the beam analysis calculation into a graph using Chart.js
- */
 class AnalysisPlotter {
     constructor(container) {
         this.container = container;
@@ -13,6 +10,13 @@ class AnalysisPlotter {
      * Reset the chart by destroying the existing instance
      */
     reset() {
+        // Hancurkan chart yang terkait dengan elemen canvas
+        const existingChart = Chart.getChart(this.container);
+        if (existingChart) {
+            existingChart.destroy();
+        }
+
+        // Jika ada chart lokal, hancurkan juga
         if (this.chart) {
             this.chart.destroy();
             this.chart = null;
@@ -25,14 +29,17 @@ class AnalysisPlotter {
      * @param {Object{beam : Beam, load : float, equation: Function}} data The equation data
      */
     plot(data) {
-        const { beam, equation } = data;
+        const { beam, equation, condition } = data;
 
-        // Generate data points for the first and second spans
+        if (condition === "simply-supported") {
+            beam.secondarySpan = 0;
+        }
+
         const xValuesPrimary = [];
         const xValuesSecondary = [];
-        const step = 0.1;
+        const step = 0.5;
 
-        for (let x = 0; x < beam.primarySpan; x += step) {
+        for (let x = 0; x <= beam.primarySpan; x += step) {
             xValuesPrimary.push(x);
         }
 
@@ -44,70 +51,97 @@ class AnalysisPlotter {
             xValuesSecondary.push(x);
         }
 
-        const pointsPrimary = xValuesPrimary.map((x) => ({
-            x,
-            y: equation(x).y,
-        }));
-        const pointsSecondary = xValuesSecondary.map((x) => ({
-            x,
-            y: equation(x).y,
-        }));
+        const pointsPrimary = xValuesPrimary.map((x) => {
+            const result = equation(x);
+            return Array.isArray(result)
+                ? { x, y: result[0].y }
+                : { x, y: result.y };
+        });
 
-        const points = [...pointsPrimary, ...pointsSecondary];
+        const pointsSecondary = xValuesSecondary.map((x) => {
+            const result = equation(x);
+            return Array.isArray(result)
+                ? { x, y: result[1].y }
+                : { x, y: result.y };
+        });
 
-        // Extract x and y values for the chart
-        const labels = points.map((p) => p.x.toFixed(2));
-        const dataValues = points.map((p) => p.y);
+        const labelsPrimary = pointsPrimary.map((p) => p.x);
+        const labelsSecondary = pointsSecondary.map((p) => p.x);
+        const dataPrimary = pointsPrimary.map((p) => p.y);
+        const dataSecondary = pointsSecondary.map((p) => p.y);
 
-        // Reset the chart
+        // remove duplicate labels
+        if (condition === "simply-supported") {
+            labelsSecondary.shift();
+        }
+
+        // Reset chart sebelum membuat yang baru
         this.reset();
 
-        // Create a new chart using Chart.js
         this.chart = new Chart(this.container, {
             type: "line",
             data: {
-                labels: labels,
+                labels: [...labelsPrimary, ...labelsSecondary],
                 datasets: [
                     {
-                        data: dataValues,
+                        data: labelsPrimary.map((x, i) => ({
+                            x,
+                            y: dataPrimary[i],
+                        })),
                         borderColor: "red",
                         backgroundColor: "rgba(70, 130, 180, 0.1)",
+                        fill: true,
                         borderWidth: 2,
-                        tension: 0.4, // Smooth curve
-                        pointRadius: 0, // No point
-                        pointBackgroundColor: "red",
-                        showLine: true, // Only show the line
+                        tension: 0.4,
+                        pointRadius: 0,
+                        showLine: true,
+                    },
+                    {
+                        data: labelsSecondary.map((x, i) => ({
+                            x,
+                            y: dataSecondary[i],
+                        })),
+                        borderColor: "red",
+                        backgroundColor: "rgba(70, 130, 180, 0.1)",
+                        fill: true,
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        showLine: true,
                     },
                 ],
             },
             options: {
                 responsive: true,
                 plugins: {
+                    legend: { display: false },
                     tooltip: {
-                        enabled: true, // Tooltip remains enabled but without zoom effect
+                        enabled: true,
                         callbacks: {
                             label: (context) =>
-                                `x: ${
-                                    labels[context.dataIndex]
-                                }, y: ${context.raw.toFixed(2)}`,
+                                `x: ${context.raw.x.toFixed(
+                                    2
+                                )}, y: ${context.raw.y.toFixed(2)}`,
                         },
                     },
                 },
                 hover: {
-                    mode: null, // Disable hover zoom
+                    mode: "nearest",
+                    intersect: false,
                 },
                 scales: {
                     x: {
                         type: "linear",
-                        title: {
-                            display: true,
-                            text: "x (Position along the beam)",
-                        },
+                        title: { display: true, text: "Span (m)" },
+                        beginAtZero: true,
                     },
                     y: {
                         title: {
                             display: true,
-                            text: "y (Resultant Value)",
+                            text:
+                                this.container === "shear_force_plot"
+                                    ? "Shear Force (kN)"
+                                    : "Bending Moment (kNm)",
                         },
                         beginAtZero: false,
                     },

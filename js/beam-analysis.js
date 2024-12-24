@@ -55,6 +55,7 @@ class BeamAnalysis {
                 beam: beam,
                 load: load,
                 equation: analyzer.getDeflectionEquation(beam, load),
+                condition: condition,
             };
         } else {
             throw new Error("Invalid condition");
@@ -68,6 +69,7 @@ class BeamAnalysis {
                 beam: beam,
                 load: load,
                 equation: analyzer.getBendingMomentEquation(beam, load),
+                condition: condition,
             };
         } else {
             throw new Error("Invalid condition");
@@ -81,6 +83,7 @@ class BeamAnalysis {
                 beam: beam,
                 load: load,
                 equation: analyzer.getShearForceEquation(beam, load),
+                condition: condition,
             };
         } else {
             throw new Error("Invalid condition");
@@ -106,26 +109,7 @@ BeamAnalysis.analyzer.simplySupported = class {
         this.beam = beam;
         this.load = load;
     }
-    getDeflectionEquation(beam, load) {
-        const { primarySpan, material } = beam;
-        const { EI } = material.properties;
 
-        return function (x) {
-            const L = primarySpan;
-            const w = load;
-            if (x >= 0 && x <= L) {
-                return {
-                    x: x,
-                    y: (w * x * (L ** 3 - 2 * L * x ** 2 + x ** 3)) / (24 * EI),
-                };
-            } else {
-                return {
-                    x: x,
-                    y: null,
-                };
-            }
-        };
-    }
     getBendingMomentEquation(beam, load) {
         const { primarySpan } = beam;
 
@@ -135,7 +119,7 @@ BeamAnalysis.analyzer.simplySupported = class {
             if (x >= 0 && x <= L) {
                 return {
                     x: x,
-                    y: (w * x * (L - x)) / 2,
+                    y: ((w * x) / 2) * (L - x),
                 };
             } else {
                 return { x: x, y: null };
@@ -172,61 +156,60 @@ BeamAnalysis.analyzer.twoSpanUnequal = class {
         this.load = load;
     }
 
-    getDeflectionEquation(beam, load) {
-        const { primarySpan, secondarySpan, material } = beam;
-        const { EI } = material.properties;
-
-        return function (x) {
-            const L1 = primarySpan;
-            const L2 = secondarySpan;
-            const w = load;
-
-            if (x >= 0 && x <= L1) {
-                // Rentang pertama
-                return {
-                    x: x,
-                    y:
-                        (w * x * (L1 ** 3 - 2 * L1 * x ** 2 + x ** 3)) /
-                        (24 * EI),
-                };
-            } else if (x > L1 && x <= L1 + L2) {
-                // Rentang kedua
-                const x2 = x - L1;
-                return {
-                    x: x,
-                    y:
-                        (w * x2 * (L2 ** 3 - 2 * L2 * x2 ** 2 + x2 ** 3)) /
-                        (24 * EI),
-                };
-            } else {
-                return { x: x, y: null };
-            }
-        };
-    }
-
     getBendingMomentEquation(beam, load) {
         const { primarySpan, secondarySpan } = beam;
 
         return function (x) {
+            if (typeof x !== "number") {
+                return "Invalid input: x must be a number.";
+            }
+
             const L1 = primarySpan;
             const L2 = secondarySpan;
             const w = load;
+            const wl1 = w * L1;
+            const wl2 = w * L2;
+            const L = L1 + L2;
 
-            if (x >= 0 && x <= L1) {
-                // Rentang pertama (First span)
+            // Calculate M1 (corrected formula)
+            const M1 = -(
+                (w * Math.pow(L1, 3) + w * Math.pow(L1, 3)) /
+                (8 * (L1 + L2))
+            );
+
+            // Calculate R1 (reaction at the left support)
+            const R1 = M1 / L1 + wl1 / 2;
+
+            // Calculate R3 (reaction at the right support)
+            const R3 = M1 / L2 + wl2 / 2;
+
+            // Calculate R2 (reaction at the middle support)
+            const R2 = wl1 + wl2 - R1 - R3;
+
+            if (x === 0) {
+                return { x, y: 0 }; // Moment at the left end (no moment at x = 0)
+            } else if (x > 0 && x < L1) {
+                return { x, y: R1 * x - (w * Math.pow(x, 2)) / 2 };
+            } else if (x === L1) {
+                return [
+                    { x, y: R1 * L1 - (w * Math.pow(L1, 2)) / 2 },
+                    {
+                        x,
+                        y: R1 * L1 + R2 * 0 - (w * Math.pow(L1, 2)) / 2,
+                    },
+                ];
+            } else if (x > L1 && x < L) {
                 return {
-                    x: x,
-                    y: (w * x * (L1 - x)) / 2, // Positive bending moment
+                    x,
+                    y: R1 * x + R2 * (x - L1) - (w * Math.pow(x, 2)) / 2,
                 };
-            } else if (x > L1 && x <= L1 + L2) {
-                // Rentang kedua (Second span)
-                const x2 = x - L1;
+            } else if (x === L) {
                 return {
-                    x: x,
-                    y: -(w * x2 * (L2 - x2)) / 2, // Negative bending moment
+                    x,
+                    y: R1 * L + R2 * (L - L1) - (w * Math.pow(L, 2)) / 2,
                 };
             } else {
-                return { x: x, y: null }; // Out of bounds, no bending moment
+                return { x, y: null };
             }
         };
     }
@@ -235,25 +218,49 @@ BeamAnalysis.analyzer.twoSpanUnequal = class {
         const { primarySpan, secondarySpan } = beam;
 
         return function (x) {
+            if (typeof x !== "number") {
+                return "Invalid input: x must be a number.";
+            }
+
             const L1 = primarySpan;
             const L2 = secondarySpan;
             const w = load;
+            const wl1 = w * L1;
+            const wl2 = w * L2;
+            const totalLength = L1 + L2;
 
-            if (x >= 0 && x <= L1) {
-                // Rentang pertama
-                return {
-                    x: x,
-                    y: w * (L1 / 2 - x),
-                };
-            } else if (x > L1 && x <= L1 + L2) {
-                // Rentang kedua
-                const x2 = x - L1;
-                return {
-                    x: x,
-                    y: w * (L2 / 2 - x2),
-                };
+            // Calculate M1 (corrected formula)
+            const M1 = -(
+                (w * Math.pow(L1, 3) + w * Math.pow(L1, 3)) /
+                (8 * (L1 + L2))
+            );
+
+            // Calculate R1 (reaction at the left support)
+            const R1 = M1 / L1 + wl1 / 2;
+
+            // Calculate R3 (reaction at the right support)
+            const R3 = M1 / L2 + wl2 / 2;
+
+            // Calculate R2 (reaction at the middle support)
+            const R2 = wl1 + wl2 - R1 - R3;
+
+            // Handle shear force equations
+            if (x === 0) {
+                return { x, y: R1 };
+            } else if (x > 0 && x < L1) {
+                return { x, y: R1 - w * x };
+            } else if (x === L1) {
+                // Return two datasets for the discontinuity at x = L1
+                return [
+                    { x, y: R1 - w * L1 },
+                    { x, y: R1 + R2 - w * L1 },
+                ];
+            } else if (x > L1 && x < totalLength) {
+                return { x, y: R1 + R2 - w * x };
+            } else if (x === totalLength) {
+                return { x, y: R1 + R2 - w * totalLength };
             } else {
-                return { x: x, y: null };
+                return { x, y: null };
             }
         };
     }

@@ -60,14 +60,12 @@
             </table>
         </form>
 
-        <h3 class="chart__title" style="display: none">Deflection Plot</h3>
-        <canvas class="chart__plot" id="deflection_plot"></canvas>
         <h3 class="chart__title" style="display: none">Shear Force Plot</h3>
         <canvas class="chart__plot" id="shear_force_plot"></canvas>
         <h3 class="chart__title" style="display: none">Bending Moment Plot</h3>
         <canvas class="chart__plot" id="bending_moment_plot"></canvas>
 
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script src="js/beam-analysis.js"></script>
         <script src="js/analysis-plotter.js"></script>
 
@@ -91,11 +89,6 @@
                         el.style.display = "block";
                     });
 
-                    // remove chart plot
-                    document.querySelectorAll(".chart__plot").forEach((el) => {
-                        el.innerHTML = "";
-                    });
-
                     // parameter beam
                     var beam = new Beam();
 
@@ -107,7 +100,6 @@
 
                     // grafik
                     var plotter = {
-                        deflection: new AnalysisPlotter("deflection_plot"),
                         shearForce: new AnalysisPlotter("shear_force_plot"),
                         bendingMoment: new AnalysisPlotter(
                             "bending_moment_plot"
@@ -116,11 +108,7 @@
 
                     // beam analysis
                     var beamAnalysis = new BeamAnalysis();
-                    var deflectionData = beamAnalysis.getDeflection(
-                        beam,
-                        floatVal("w"),
-                        stringVal("condition")
-                    );
+
                     var bendingMomentData = beamAnalysis.getBendingMoment(
                         beam,
                         floatVal("w"),
@@ -132,7 +120,6 @@
                         stringVal("condition")
                     );
 
-                    plotter.deflection.plot(deflectionData);
                     plotter.shearForce.plot(shearForceData);
                     plotter.bendingMoment.plot(bendingMomentData);
                 });
