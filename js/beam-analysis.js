@@ -210,18 +210,17 @@ BeamAnalysis.analyzer.twoSpanUnequal = class {
             const R2 = wl1 + wl2 - R1 - R3; // Beban terpusat
 
             // Validasi jika x berada dalam rentang yang benar
-            if (x < 0 || x > L) {
-                return { x, deflection: null }; // x di luar rentang balok
-            }
+            // if (x < 0 || x > L) {
+            //     return { x, deflection: null }; // x di luar rentang balok
+            // }
             if (x >= 0 && x <= L1) {
                 return {
                     x,
                     y:
-                        (x / 24) *
-                        (EI / Math.pow(1000, 3)) *
+                        (x / (24 * (EI / Math.pow(1000, 3)))) *
                         (4 * R1 * Math.pow(x, 2) -
                             w * Math.pow(x, 3) +
-                            Math.pow(wl1, 3) -
+                            w * Math.pow(L1, 3) -
                             4 * R1 * Math.pow(L1, 2)) *
                         1000 *
                         j2,
@@ -230,19 +229,15 @@ BeamAnalysis.analyzer.twoSpanUnequal = class {
                 return {
                     x,
                     y:
-                        (((R1 * x) / 6) *
+                        (1 / (EI / Math.pow(1000, 3))) *
+                            ((R1 * x) / 6) *
+                            (Math.pow(x, 2) - Math.pow(L1, 2)) +
+                        ((R2 * x) / 6) *
                             (Math.pow(x, 2) -
-                                Math.pow(L1, 2) +
-                                ((R2 * x) / 6) *
-                                    (Math.pow(x, 2) -
-                                        3 * L1 * x +
-                                        3 * Math.pow(L1, 2)) -
-                                ((((R2 * Math.pow(L1, 3)) / 6) * -(w * x)) /
-                                    24) *
-                                    (Math.pow(x, 3) - Math.pow(L1, 3))) *
-                            1) /
-                        EI /
-                        Math.pow(1000, 3),
+                                3 * L1 * x +
+                                3 * Math.pow(L1, 2)) -
+                        (R2 * Math.pow(L1, 3)) / 6 -
+                        ((w * x) / 24) * (Math.pow(x, 3) - Math.pow(L1, 3)),
                 };
             }
         };
