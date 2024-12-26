@@ -109,6 +109,32 @@ BeamAnalysis.analyzer.simplySupported = class {
         this.beam = beam;
         this.load = load;
     }
+    getDeflectionEquation(beam, load) {
+        const { primarySpan, material } = beam;
+        const j2 = material.properties.j2;
+        const EI = material.properties.EI;
+
+        return function (x) {
+            const L = primarySpan;
+            const w = load;
+            if (x >= 0 && x <= L) {
+                const deflection =
+                    -((w * x) / (24 * EI)) *
+                    (Math.pow(L, 3) - 2 * L * Math.pow(x, 2) + Math.pow(x, 3)) *
+                    j2 *
+                    1000;
+
+                const simplifiedDeflection = (deflection * 1e9).toFixed(2);
+
+                return {
+                    x: x,
+                    y: parseFloat(simplifiedDeflection),
+                };
+            } else {
+                return { x: x, deflection: null };
+            }
+        };
+    }
 
     getBendingMomentEquation(beam, load) {
         const { primarySpan } = beam;
@@ -154,6 +180,72 @@ BeamAnalysis.analyzer.twoSpanUnequal = class {
     constructor(beam, load) {
         this.beam = beam;
         this.load = load;
+    }
+    getDeflectionEquation(beam, load) {
+        const { primarySpan, secondarySpan, material } = beam;
+        const j2 = material.properties.j2;
+        const EI = material.properties.EI;
+
+        return function (x) {
+            const L1 = primarySpan;
+            const L2 = secondarySpan;
+            const w = load;
+            const wl1 = w * L1;
+            const wl2 = w * L2;
+            const L = L1 + L2;
+
+            // Calculate M1 (corrected formula)
+            const M1 = -(
+                (w * Math.pow(L1, 3) + w * Math.pow(L1, 3)) /
+                (8 * (L1 + L2))
+            );
+
+            // Calculate R1 (reaction at the left support)
+            const R1 = M1 / L1 + wl1 / 2;
+
+            // Calculate R3 (reaction at the right support)
+            const R3 = M1 / L2 + wl2 / 2;
+
+            // Calculate R2 (reaction at the middle support)
+            const R2 = wl1 + wl2 - R1 - R3; // Beban terpusat
+
+            // Validasi jika x berada dalam rentang yang benar
+            if (x < 0 || x > L) {
+                return { x, deflection: null }; // x di luar rentang balok
+            }
+            if (x >= 0 && x <= L1) {
+                return {
+                    x,
+                    y:
+                        (x / 24) *
+                        (EI / Math.pow(1000, 3)) *
+                        (4 * R1 * Math.pow(x, 2) -
+                            w * Math.pow(x, 3) +
+                            Math.pow(wl1, 3) -
+                            4 * R1 * Math.pow(L1, 2)) *
+                        1000 *
+                        j2,
+                };
+            } else if (x > L1 && x <= L) {
+                return {
+                    x,
+                    y:
+                        (((R1 * x) / 6) *
+                            (Math.pow(x, 2) -
+                                Math.pow(L1, 2) +
+                                ((R2 * x) / 6) *
+                                    (Math.pow(x, 2) -
+                                        3 * L1 * x +
+                                        3 * Math.pow(L1, 2)) -
+                                ((((R2 * Math.pow(L1, 3)) / 6) * -(w * x)) /
+                                    24) *
+                                    (Math.pow(x, 3) - Math.pow(L1, 3))) *
+                            1) /
+                        EI /
+                        Math.pow(1000, 3),
+                };
+            }
+        };
     }
 
     getBendingMomentEquation(beam, load) {

@@ -141,6 +141,8 @@ class AnalysisPlotter {
                             text:
                                 this.container === "shear_force_plot"
                                     ? "Shear Force (kN)"
+                                    : this.container === "deflection_plot"
+                                    ? "Deflection (mm)"
                                     : "Bending Moment (kNm)",
                         },
                         beginAtZero: false,
